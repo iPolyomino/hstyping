@@ -3,6 +3,9 @@ import Data.Time (getCurrentTime, diffUTCTime)
 import Data.List (genericLength)
 import Data.Traversable (for)
 import System.Environment (getArgs)
+import Text.Read (readMaybe)
+import Data.Char (isSpace)
+import Data.Maybe (catMaybes)
 
 doWhile :: Monad m => m (Maybe a) -> m [a]
 doWhile m = do
@@ -33,6 +36,34 @@ countMiss [] ds = genericLength ds
 point :: String -> String -> Integer -> Integer
 point s0 s1 sc = genericLength s0 * 60 `div` (sc + countMiss s0 s1)
 
+type Record = (String, Integer)
+
+record :: String -> Maybe Record
+record str = let n : p : _ = words str in (,) n <$> readMaybe p
+
+fromRecord :: Record -> String
+fromRecord (n, p) = n ++ " " ++ show p
+
+insertRecord :: Integer -> [Record] -> [(Maybe String, Integer)]
+insertRecord px rrs@((nr, pr) : rs)
+        | px >= pr = (Nothing, px) : map (\(n, p) -> (Just n, p)) rrs
+        | otherwise = (Just nr, pr) : insertRecord px rs
+insertRecord px [] = [(Nothing, px)]
+
+yourName :: [(Maybe String, Integer)] -> IO [Record]
+yourName ((Just n, p) : rs) = ((n, p) :) <$> yourName rs
+yourName ((Nothing, p) : rs) = do
+        putStrLn "What's your name?"
+        n <- getLine
+        ((filter (not . isSpace) n, p) :) <$> yourName rs
+yourName [] = return []
+
+ranking :: FilePath -> Integer -> IO ()
+ranking fp p = do
+        rs <- catMaybes . map record <$> fileLines fp
+        rs' <- yourName . take 10 $ insertRecord p rs
+        writeFile fp . unlines $ map fromRecord rs'
+
 main :: IO ()
 main = do
         fp : _ <- getArgs
@@ -43,4 +74,6 @@ main = do
                 let     p = point l s sc
                 print p
                 return p
-        print $ sum ps `div` genericLength ps
+        let rslt = sum ps `div` genericLength ps
+        print rslt
+        ranking "ranking.txt" rslt

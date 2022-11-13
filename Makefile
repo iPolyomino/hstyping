@@ -1,4 +1,5 @@
 build:
+	touch ranking.txt
 	stack ghc -- typingGame.hs -o bin/typingGame
 
 run: build
