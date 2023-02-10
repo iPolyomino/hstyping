@@ -6,6 +6,10 @@ import System.Environment (getArgs)
 import Text.Read (readMaybe)
 import Data.Char (isSpace)
 import Data.Maybe (catMaybes)
+import System.Random (getStdRandom, randomR)
+
+typingLines = 5
+rankingFile = "ranking.txt"
 
 doWhile :: Monad m => m (Maybe a) -> m [a]
 doWhile m = do
@@ -18,6 +22,12 @@ fileLines :: FilePath -> IO [String]
 fileLines fp = withFile fp ReadMode $ \h -> doWhile $ do
         b <- hIsEOF h
         if b then return Nothing else Just <$> hGetLine h
+
+generateProblem :: [String] -> IO [String]
+generateProblem lines = randomRange >>=
+        \i -> return $ take typingLines $ drop i lines
+        where
+        randomRange = getStdRandom $ randomR (0, length lines - typingLines)
 
 getLineWithTime :: IO (String, Integer)
 getLineWithTime = do
@@ -67,13 +77,14 @@ ranking fp p = do
 main :: IO ()
 main = do
         fp : _ <- getArgs
-        ls <- fileLines fp
-        ps <- for ls $ \l -> do
+        line <- fileLines fp
+        pro <- generateProblem line
+        ps <- for pro $ \l -> do
                 putStrLn l
                 (s, sc) <- getLineWithTime
-                let     p = point l s sc
+                let p = point l s sc
                 print p
                 return p
         let rslt = sum ps `div` genericLength ps
         print rslt
-        ranking "ranking.txt" rslt
+        ranking rankingFile rslt
