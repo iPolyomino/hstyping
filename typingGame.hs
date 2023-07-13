@@ -1,7 +1,9 @@
 import Data.Char (isSpace)
 import Data.List (genericLength)
 import Data.Maybe (catMaybes)
-import Data.Time (diffUTCTime, getCurrentTime)
+import Data.Time (diffUTCTime, getCurrentTime, UTCTime)
+import Data.Time.Format (defaultTimeLocale, parseTimeM)
+import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Traversable (for)
 import System.Environment (getArgs)
 import System.IO (IOMode (..), hGetLine, hIsEOF, withFile)
@@ -48,26 +50,31 @@ countMiss [] ds = genericLength ds
 point :: String -> String -> Integer -> Integer
 point s0 s1 sc = genericLength s0 * 60 `div` (sc + countMiss s0 s1)
 
-type Record = (String, Integer)
+type Record = (String, UTCTime, Integer)
 
 record :: String -> Maybe Record
-record str = let n : p : _ = words str in (,) n <$> readMaybe p
+record str = do
+  let [n, t, p] = words str
+  tm <- parseTimeM True defaultTimeLocale "%FT%T%QZ" t
+  pt <- readMaybe p
+  return (n, tm, pt)
 
 fromRecord :: Record -> String
-fromRecord (n, p) = n ++ " " ++ show p
+fromRecord (n, t, p) = n ++ " " ++ iso8601Show t ++ " " ++ show p
 
-insertRecord :: Integer -> [Record] -> [(Maybe String, Integer)]
-insertRecord px rrs@((nr, pr) : rs)
-  | px >= pr = (Nothing, px) : map (\(n, p) -> (Just n, p)) rrs
-  | otherwise = (Just nr, pr) : insertRecord px rs
-insertRecord px [] = [(Nothing, px)]
+insertRecord :: Integer -> [Record] -> [(Maybe String, Maybe UTCTime, Integer)]
+insertRecord px rrs@((nr, tr, pr) : rs)
+  | px >= pr = (Nothing, Nothing, px) : map (\(n, t, p) -> (Just n, Just t, p)) rrs
+  | otherwise = (Just nr, Just tr, pr) : insertRecord px rs
+insertRecord px [] = [(Nothing, Nothing, px)]
 
-yourName :: [(Maybe String, Integer)] -> IO [Record]
-yourName ((Just n, p) : rs) = ((n, p) :) <$> yourName rs
-yourName ((Nothing, p) : rs) = do
+yourName :: [(Maybe String, Maybe UTCTime, Integer)] -> IO [Record]
+yourName ((Just n, Just t, p) : rs) = ((n, t, p) :) <$> yourName rs
+yourName ((Nothing, Nothing, p) : rs) = do
   putStrLn "What's your name?"
   n <- getLine
-  ((filter (not . isSpace) n, p) :) <$> yourName rs
+  t <- getCurrentTime
+  ((filter (not . isSpace) n, t, p) :) <$> yourName rs
 yourName [] = return []
 
 ranking :: FilePath -> Integer -> IO ()
